@@ -1,0 +1,27 @@
+{
+  "name": "liberchen/tidal-bot-for-discord",
+  "description": "Discord bot using CWA tide forecast API",
+  "type": "project",
+  "license": "proprietary",
+  "minimum-stability": "stable",
+  "authors": [
+    {
+      "name": "liber",
+      "email": "liberchen@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=8.0",
+    "team-reflex/discord-php": "^10.1.7",
+    "vlucas/phpdotenv": "^5.5",
+    "guzzlehttp/guzzle": "^7.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  },
+  "scripts": {
+    "start": "php src/DiscordBot.php"
+  }
+}
