@@ -7,6 +7,7 @@ use Discord\Builders\CommandBuilder;
 use Discord\Builders\Components\ActionRow;
 use Discord\Builders\Components\SelectMenu;
 use Discord\Parts\Interactions\Interaction;
+use Discord\Parts\Interactions\Command as DiscordCommand;
 use App\TideService;
 use App\LocationHelper;
 use Dotenv\Dotenv;
@@ -49,18 +50,23 @@ $discord = new Discord([
 $discord->on('init', function (Discord $discord) use ($tideService, $locationHelper, $guildId) {
     debug_log("Bot is initialized and connected to Discord.");
 
-    // 指令定義
+    // 指令定義 (使用 CommandBuilder 建立資料)
     $commandName = 'tide';
     $commandDescription = "Select a location to check today's tide forecast";
-    $command = new CommandBuilder();
-    $command->setName($commandName)
+    $builder = new CommandBuilder();
+    $builder->setName($commandName)
         ->setDescription($commandDescription);
 
-    // 指令註冊：若有提供 GUILD_ID 則註冊為 guild 指令，方便測試即時更新
+    // 將 builder 轉換成陣列資料，再用來建立一個 DiscordCommand 物件
+    $payload = $builder->toArray();
+    $discordCommand = new DiscordCommand($discord);
+    $discordCommand->fill($payload);
+
+    // 指令註冊：若有提供 GUILD_ID 則註冊為 guild command，方便測試即時更新
     if ($guildId) {
         debug_log("Registering guild command for Guild ID: {$guildId}");
         $discord->application->guildCommands($guildId)->freshen()->then(
-            function ($commands) use ($discord, $command, $commandName, $guildId) {
+            function ($commands) use ($discord, $discordCommand, $commandName, $guildId) {
                 $exists = false;
                 foreach ($commands as $cmd) {
                     if ($cmd->name === $commandName) {
@@ -69,7 +75,7 @@ $discord->on('init', function (Discord $discord) use ($tideService, $locationHel
                     }
                 }
                 if (!$exists) {
-                    $discord->application->guildCommands($guildId)->save($command)->then(
+                    $discord->application->guildCommands($guildId)->save($discordCommand)->then(
                         function () use ($commandName, $guildId) {
                             debug_log("Guild command '{$commandName}' registered successfully for Guild ID: {$guildId}");
                         },
@@ -88,7 +94,7 @@ $discord->on('init', function (Discord $discord) use ($tideService, $locationHel
     } else {
         debug_log("Registering global command.");
         $discord->application->commands->freshen()->then(
-            function ($commands) use ($discord, $command, $commandName) {
+            function ($commands) use ($discord, $discordCommand, $commandName) {
                 $exists = false;
                 foreach ($commands as $cmd) {
                     if ($cmd->name === $commandName) {
@@ -97,7 +103,7 @@ $discord->on('init', function (Discord $discord) use ($tideService, $locationHel
                     }
                 }
                 if (!$exists) {
-                    $discord->application->commands->save($command)->then(
+                    $discord->application->commands->save($discordCommand)->then(
                         function () use ($commandName) {
                             debug_log("Global command '{$commandName}' registered successfully.");
                         },
@@ -118,7 +124,6 @@ $discord->on('init', function (Discord $discord) use ($tideService, $locationHel
     // 監聽互動事件
     $discord->on('interactionCreate', function (Interaction $interaction) use ($tideService, $locationHelper) {
         debug_log("Received an interaction event.");
-
         // 處理 Slash Command (英文指令)
         if (isset($interaction->data->name) && $interaction->data->name === 'tide') {
             debug_log("Processing '/tide' command interaction.");
