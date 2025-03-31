@@ -11,9 +11,9 @@ use App\TideService;
 use App\LocationHelper;
 use Dotenv\Dotenv;
 
-// 載入 .env 檔案（Heroku 上會使用 Config Vars）
+// 使用 safeLoad() 以免找不到 .env 檔案時拋出例外（Heroku 上 Config Vars 已提供環境變數）
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
-$dotenv->load();
+$dotenv->safeLoad();
 
 // 設定時區為台北
 date_default_timezone_set('Asia/Taipei');
@@ -23,14 +23,14 @@ $discordToken = $_ENV['DISCORD_TOKEN'] ?? null;
 $tideApiToken = $_ENV['TIDE_API_TOKEN'] ?? null;
 
 if (!$discordToken || !$tideApiToken) {
-    echo "環境變數設定錯誤，請確認 DISCORD_TOKEN 與 TIDE_API_TOKEN 已正確設定。" . PHP_EOL;
+    echo "Environment variables not set properly. Ensure DISCORD_TOKEN and TIDE_API_TOKEN are configured." . PHP_EOL;
     exit(1);
 }
 
 $tideService = new TideService($tideApiToken);
 $locationHelper = new LocationHelper(__DIR__ . '/../data/locations.json');
 
-// 建立 Discord Bot 實例，使用 GUILDS intents
+// 建立 Discord Bot 實例，這裡只訂閱 GUILDS 事件以支援 slash 指令
 $discord = new Discord([
     'token'   => $discordToken,
     'intents' => Intents::GUILDS,
@@ -39,14 +39,14 @@ $discord = new Discord([
 $discord->on('ready', function (Discord $discord) use ($tideService, $locationHelper) {
     echo "Bot is ready." . PHP_EOL;
 
-    // 註冊 Slash Command，名稱與描述皆為英文
+    // 註冊 Slash Command：名稱與描述皆為英文
     $commandName = 'tide';
     $commandDescription = "Select a location to check today's tide forecast";
     $command = new CommandBuilder();
     $command->setName($commandName)
         ->setDescription($commandDescription);
 
-    // 取得現有指令，避免重複註冊
+    // 避免重複註冊
     $discord->application->commands->freshen()->done(function ($commands) use ($discord, $command, $commandName) {
         $exists = false;
         foreach ($commands as $cmd) {
