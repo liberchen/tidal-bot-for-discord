@@ -11,63 +11,117 @@ use App\TideService;
 use App\LocationHelper;
 use Dotenv\Dotenv;
 
-// 使用 safeLoad() 以免找不到 .env 檔案時拋出例外（Heroku 上 Config Vars 已提供環境變數）
+// 簡單的 debug log 函式
+function debug_log($message) {
+    echo date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL;
+}
+
+// 載入 .env 檔案（Heroku 上使用 Config Vars，不一定有 .env）
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->safeLoad();
+debug_log("Environment variables loaded (using safeLoad).");
 
 // 設定時區為台北
 date_default_timezone_set('Asia/Taipei');
+debug_log("Timezone set to Asia/Taipei.");
 
 // 取得環境變數
 $discordToken = $_ENV['DISCORD_TOKEN'] ?? null;
 $tideApiToken = $_ENV['TIDE_API_TOKEN'] ?? null;
+$guildId = $_ENV['GUILD_ID'] ?? null; // 選擇性用於測試用的 guild 指令
 
 if (!$discordToken || !$tideApiToken) {
-    echo "Environment variables not set properly. Ensure DISCORD_TOKEN and TIDE_API_TOKEN are configured." . PHP_EOL;
+    debug_log("Missing environment variables. Exiting.");
     exit(1);
 }
 
 $tideService = new TideService($tideApiToken);
 $locationHelper = new LocationHelper(__DIR__ . '/../data/locations.json');
+debug_log("TideService and LocationHelper instantiated.");
 
-// 建立 Discord Bot 實例，這裡只訂閱 GUILDS 事件以支援 slash 指令
+// 建立 Discord Bot 實例，僅訂閱 GUILDS 事件（支援 slash 指令）
 $discord = new Discord([
     'token'   => $discordToken,
     'intents' => Intents::GUILDS,
 ]);
 
-$discord->on('ready', function (Discord $discord) use ($tideService, $locationHelper) {
-    echo "Bot is ready." . PHP_EOL;
+// 使用 'init' 事件替代已廢止的 'ready'
+$discord->on('init', function (Discord $discord) use ($tideService, $locationHelper, $guildId) {
+    debug_log("Bot is initialized and connected to Discord.");
 
-    // 註冊 Slash Command：名稱與描述皆為英文
+    // 指令定義
     $commandName = 'tide';
     $commandDescription = "Select a location to check today's tide forecast";
     $command = new CommandBuilder();
     $command->setName($commandName)
         ->setDescription($commandDescription);
 
-    // 避免重複註冊
-    $discord->application->commands->freshen()->done(function ($commands) use ($discord, $command, $commandName) {
-        $exists = false;
-        foreach ($commands as $cmd) {
-            if ($cmd->name === $commandName) {
-                $exists = true;
-                break;
+    // 指令註冊：若有提供 GUILD_ID 則註冊為 guild 指令，方便測試即時更新
+    if ($guildId) {
+        debug_log("Registering guild command for Guild ID: {$guildId}");
+        $discord->application->guildCommands($guildId)->freshen()->then(
+            function ($commands) use ($discord, $command, $commandName, $guildId) {
+                $exists = false;
+                foreach ($commands as $cmd) {
+                    if ($cmd->name === $commandName) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $discord->application->guildCommands($guildId)->save($command)->then(
+                        function () use ($commandName, $guildId) {
+                            debug_log("Guild command '{$commandName}' registered successfully for Guild ID: {$guildId}");
+                        },
+                        function ($e) {
+                            debug_log("Error registering guild command: " . $e->getMessage());
+                        }
+                    );
+                } else {
+                    debug_log("Guild command '{$commandName}' already exists. Skipping registration.");
+                }
+            },
+            function ($e) {
+                debug_log("Error fetching guild commands: " . $e->getMessage());
             }
-        }
-        if (!$exists) {
-            $discord->application->commands->save($command);
-            echo "Registered command: {$commandName}" . PHP_EOL;
-        } else {
-            echo "Command {$commandName} already exists. Skipping registration." . PHP_EOL;
-        }
-    });
+        );
+    } else {
+        debug_log("Registering global command.");
+        $discord->application->commands->freshen()->then(
+            function ($commands) use ($discord, $command, $commandName) {
+                $exists = false;
+                foreach ($commands as $cmd) {
+                    if ($cmd->name === $commandName) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $discord->application->commands->save($command)->then(
+                        function () use ($commandName) {
+                            debug_log("Global command '{$commandName}' registered successfully.");
+                        },
+                        function ($e) {
+                            debug_log("Error registering global command: " . $e->getMessage());
+                        }
+                    );
+                } else {
+                    debug_log("Global command '{$commandName}' already exists. Skipping registration.");
+                }
+            },
+            function ($e) {
+                debug_log("Error fetching global commands: " . $e->getMessage());
+            }
+        );
+    }
 
     // 監聽互動事件
     $discord->on('interactionCreate', function (Interaction $interaction) use ($tideService, $locationHelper) {
-        // 處理 Slash Command 互動（英文指令）
+        debug_log("Received an interaction event.");
+
+        // 處理 Slash Command (英文指令)
         if (isset($interaction->data->name) && $interaction->data->name === 'tide') {
-            // 取得所有地點資料
+            debug_log("Processing '/tide' command interaction.");
             $locations = $locationHelper->search('');
             $options = [];
             foreach ($locations as $id => $name) {
@@ -76,11 +130,11 @@ $discord->on('ready', function (Discord $discord) use ($tideService, $locationHe
                     'value' => $id,
                 ];
             }
+            debug_log("Prepared location options: " . json_encode($options));
 
             $selectMenu = SelectMenu::new('tide_location')
                 ->setPlaceholder('Please select a location')
                 ->addOptions($options);
-
             $actionRow = ActionRow::new()->addComponent($selectMenu);
 
             // 使用數值 4 代表 CHANNEL_MESSAGE_WITH_SOURCE
@@ -89,16 +143,18 @@ $discord->on('ready', function (Discord $discord) use ($tideService, $locationHe
                 'components' => [$actionRow],
                 'ephemeral'  => true
             ]);
+            debug_log("Responded to '/tide' command with location select menu.");
         }
 
         // 處理下拉選單選擇結果
         if (isset($interaction->data->component_type) && $interaction->data->component_type === 3 &&
             isset($interaction->data->custom_id) && $interaction->data->custom_id === 'tide_location') {
-
+            debug_log("Processing selection from 'tide_location' menu.");
             $locationId = $interaction->data->values[0];
             $locationName = $locationHelper->getNameById($locationId);
             $today = date('Y-m-d'); // 日期格式：yyyy-mm-dd
             $tides = $tideService->getTideForecast($locationId, $today);
+            debug_log("Fetched tide forecast for location ID {$locationId} on {$today}.");
 
             if ($tides && is_array($tides)) {
                 $reply = "📍 Tide forecast for {$locationName} on {$today}:\n";
@@ -111,13 +167,16 @@ $discord->on('ready', function (Discord $discord) use ($tideService, $locationHe
                 $interaction->respondWithMessage(4, [
                     'content' => $reply
                 ]);
+                debug_log("Responded with tide forecast: " . $reply);
             } else {
                 $interaction->respondWithMessage(4, [
                     'content' => "⚠️ Unable to retrieve tide forecast. Please try again later."
                 ]);
+                debug_log("Failed to fetch tide forecast; sent error response.");
             }
         }
     });
 });
 
+debug_log("Starting Discord Bot...");
 $discord->run();
