@@ -7,7 +7,7 @@ use Discord\Builders\CommandBuilder;
 use Discord\Builders\Components\ActionRow;
 use Discord\Builders\Components\SelectMenu;
 use Discord\Parts\Interactions\Interaction;
-use Discord\Parts\Interactions\Command\Command as DiscordCommand; // 注意這裡的正確命名空間
+use Discord\Parts\Interactions\Command\Command as DiscordCommand;
 use App\TideService;
 use App\LocationHelper;
 use Dotenv\Dotenv;
@@ -62,10 +62,11 @@ $discord->on('init', function (Discord $discord) use ($tideService, $locationHel
     $discordCommand = new DiscordCommand($discord);
     $discordCommand->fill($payload);
 
-    // 註冊指令：若有設定 GUILD_ID 則註冊為 guild command，否則註冊全域指令
+    // 註冊指令：如果有設定 GUILD_ID 則註冊為 guild 指令，否則註冊全域指令
     if ($guildId) {
         debug_log("Registering guild command for Guild ID: {$guildId}");
-        $discord->application->guildCommands($guildId)->freshen()->then(
+        // 先取得該 guild 的現有指令
+        $discord->application->commands->freshen($guildId)->then(
             function ($commands) use ($discord, $discordCommand, $commandName, $guildId) {
                 $exists = false;
                 foreach ($commands as $cmd) {
@@ -75,7 +76,7 @@ $discord->on('init', function (Discord $discord) use ($tideService, $locationHel
                     }
                 }
                 if (!$exists) {
-                    $discord->application->guildCommands($guildId)->save($discordCommand)->then(
+                    $discord->application->commands->save($discordCommand, $guildId)->then(
                         function () use ($commandName, $guildId) {
                             debug_log("Guild command '{$commandName}' registered successfully for Guild ID: {$guildId}");
                         },
