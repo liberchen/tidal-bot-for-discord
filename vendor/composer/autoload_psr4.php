@@ -42,7 +42,7 @@ return array(
     'Evenement\\' => array($vendorDir . '/evenement/evenement/src'),
     'Dotenv\\' => array($vendorDir . '/vlucas/phpdotenv/src'),
     'Discord\\Http\\' => array($vendorDir . '/discord-php/http/src/Discord'),
-    'Discord\\' => array($vendorDir . '/discord/interactions/discord', $vendorDir . '/team-reflex/discord-php/src/Discord'),
+    'Discord\\' => array($vendorDir . '/team-reflex/discord-php/src/Discord', $vendorDir . '/discord/interactions/discord'),
     'Carbon\\Doctrine\\' => array($vendorDir . '/carbonphp/carbon-doctrine-types/src/Carbon/Doctrine'),
     'Carbon\\' => array($vendorDir . '/nesbot/carbon/src/Carbon'),
     'App\\' => array($baseDir . '/src'),

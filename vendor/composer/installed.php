@@ -3,7 +3,7 @@
         'name' => 'liberchen/tidal-bot-for-discord',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '33627db88977a6d77b527cd7ff0a95d323802ac5',
+        'reference' => '786c148547cb8ae620e053f4339d6fe8cc19f6c7',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -112,7 +112,7 @@
         'liberchen/tidal-bot-for-discord' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '33627db88977a6d77b527cd7ff0a95d323802ac5',
+            'reference' => '786c148547cb8ae620e053f4339d6fe8cc19f6c7',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

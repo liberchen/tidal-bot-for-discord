@@ -246,8 +246,8 @@ class ComposerStaticInitec76961b5b12961daefd9abe12e5ae27
         ),
         'Discord\\' => 
         array (
-            0 => __DIR__ . '/..' . '/discord/interactions/discord',
-            1 => __DIR__ . '/..' . '/team-reflex/discord-php/src/Discord',
+            0 => __DIR__ . '/..' . '/team-reflex/discord-php/src/Discord',
+            1 => __DIR__ . '/..' . '/discord/interactions/discord',
         ),
         'Carbon\\Doctrine\\' => 
         array (

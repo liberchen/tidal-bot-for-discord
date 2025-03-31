@@ -2,16 +2,16 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Discord\Discord;
+use Discord\WebSockets\Intents;
 use Discord\Builders\CommandBuilder;
 use Discord\Builders\Components\ActionRow;
 use Discord\Builders\Components\SelectMenu;
 use Discord\Parts\Interactions\Interaction;
-use Discord\WebSockets\InteractionResponseTypes;
 use App\TideService;
 use App\LocationHelper;
 use Dotenv\Dotenv;
 
-// 載入 .env 檔案
+// 載入 .env 檔案（Heroku 上會使用 Config Vars）
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
@@ -30,19 +30,18 @@ if (!$discordToken || !$tideApiToken) {
 $tideService = new TideService($tideApiToken);
 $locationHelper = new LocationHelper(__DIR__ . '/../data/locations.json');
 
-// 建立 Discord Bot 實例
+// 建立 Discord Bot 實例，使用 GUILDS intents
 $discord = new Discord([
     'token'   => $discordToken,
-    'intents' => Discord::INTENTS_ALL,
+    'intents' => Intents::GUILDS,
 ]);
 
 $discord->on('ready', function (Discord $discord) use ($tideService, $locationHelper) {
-    echo "Bot 已啟動且準備就緒！" . PHP_EOL;
+    echo "Bot is ready." . PHP_EOL;
 
-    // 註冊 Slash Command: 潮汐查詢
-    $commandName = '潮汐查詢';
-    $commandDescription = '選擇一個地點查看今日潮汐預報';
-
+    // 註冊 Slash Command，名稱與描述皆為英文
+    $commandName = 'tide';
+    $commandDescription = "Select a location to check today's tide forecast";
     $command = new CommandBuilder();
     $command->setName($commandName)
         ->setDescription($commandDescription);
@@ -58,16 +57,16 @@ $discord->on('ready', function (Discord $discord) use ($tideService, $locationHe
         }
         if (!$exists) {
             $discord->application->commands->save($command);
-            echo "已註冊指令: {$commandName}" . PHP_EOL;
+            echo "Registered command: {$commandName}" . PHP_EOL;
         } else {
-            echo "指令 {$commandName} 已存在，略過註冊。" . PHP_EOL;
+            echo "Command {$commandName} already exists. Skipping registration." . PHP_EOL;
         }
     });
 
     // 監聽互動事件
     $discord->on('interactionCreate', function (Interaction $interaction) use ($tideService, $locationHelper) {
-        // 處理 Slash Command 互動
-        if (isset($interaction->data->name) && $interaction->data->name === '潮汐查詢') {
+        // 處理 Slash Command 互動（英文指令）
+        if (isset($interaction->data->name) && $interaction->data->name === 'tide') {
             // 取得所有地點資料
             $locations = $locationHelper->search('');
             $options = [];
@@ -79,13 +78,14 @@ $discord->on('ready', function (Discord $discord) use ($tideService, $locationHe
             }
 
             $selectMenu = SelectMenu::new('tide_location')
-                ->setPlaceholder('請選擇地點')
+                ->setPlaceholder('Please select a location')
                 ->addOptions($options);
 
             $actionRow = ActionRow::new()->addComponent($selectMenu);
 
-            $interaction->respondWithMessage(InteractionResponseTypes::CHANNEL_MESSAGE_WITH_SOURCE, [
-                'content'    => '請選擇地點：',
+            // 使用數值 4 代表 CHANNEL_MESSAGE_WITH_SOURCE
+            $interaction->respondWithMessage(4, [
+                'content'    => 'Please select a location:',
                 'components' => [$actionRow],
                 'ephemeral'  => true
             ]);
@@ -97,28 +97,23 @@ $discord->on('ready', function (Discord $discord) use ($tideService, $locationHe
 
             $locationId = $interaction->data->values[0];
             $locationName = $locationHelper->getNameById($locationId);
-            $today = date('Y-m-d'); // 確保格式為 yyyy-mm-dd
+            $today = date('Y-m-d'); // 日期格式：yyyy-mm-dd
             $tides = $tideService->getTideForecast($locationId, $today);
 
             if ($tides && is_array($tides)) {
-                $reply = "📍 {$locationName} 今日潮汐預報：\n";
+                $reply = "📍 Tide forecast for {$locationName} on {$today}:\n";
                 foreach ($tides as $tide) {
-                    // 檢查必要資料是否存在
                     if (isset($tide['DateTime'], $tide['Tide'], $tide['TideHeights']['AboveChartDatum'])) {
-                        $reply .= sprintf(
-                            "%s - %s（潮高：%dcm）\n",
-                            $tide['DateTime'],
-                            $tide['Tide'],
-                            $tide['TideHeights']['AboveChartDatum']
-                        );
+                        $time = date("H:i", strtotime($tide['DateTime']));
+                        $reply .= sprintf("%s - %s (Height: %dcm)\n", $time, $tide['Tide'], $tide['TideHeights']['AboveChartDatum']);
                     }
                 }
-                $interaction->respondWithMessage(InteractionResponseTypes::CHANNEL_MESSAGE_WITH_SOURCE, [
+                $interaction->respondWithMessage(4, [
                     'content' => $reply
                 ]);
             } else {
-                $interaction->respondWithMessage(InteractionResponseTypes::CHANNEL_MESSAGE_WITH_SOURCE, [
-                    'content' => "⚠️ 找不到潮汐資料，請稍後再試。"
+                $interaction->respondWithMessage(4, [
+                    'content' => "⚠️ Unable to retrieve tide forecast. Please try again later."
                 ]);
             }
         }
