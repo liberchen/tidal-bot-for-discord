@@ -171,4 +171,19 @@ $discord->on('init', function (Discord $discord) use ($tideService, $locationHel
                         $reply .= sprintf("%s - %s (Height: %dcm)\n", $time, $tide['Tide'], $tide['TideHeights']['AboveChartDatum']);
                     }
                 }
-                $interaction
+                $interaction->respondWithMessage(4, [
+                    'content' => $reply
+                ]);
+                debug_log("Responded with tide forecast: " . $reply);
+            } else {
+                $interaction->respondWithMessage(4, [
+                    'content' => "⚠️ Unable to retrieve tide forecast. Please try again later."
+                ]);
+                debug_log("Failed to fetch tide forecast; sent error response.");
+            }
+        }
+    });
+});
+
+debug_log("Starting Discord Bot...");
+$discord->run();
